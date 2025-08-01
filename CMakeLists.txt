@@ -49,9 +49,12 @@ catkin_package(
   CATKIN_DEPENDS ackermann_msgs geometry_msgs message_generation message_runtime nav_msgs roscpp rospy sensor_msgs std_msgs waypoint_maker
 )
 
-add_executable(mpc_path_tracking src/main.cpp
-src/mpc_path_tracking.cpp
-src/mpc.cpp)
+add_executable(mpc_path_tracking
+  src/main.cpp
+  src/mpc_path_tracking.cpp
+  src/mpc.cpp
+  src/ros_control.cpp
+)
 
 find_library(CPPAD_LIB cppad_lib PATHS /usr/local/lib)
 

@@ -92,7 +92,7 @@ void FG_eval::operator()(ADvector &fg, const ADvector &vars)
     }
 }
 
-vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs)
+std::vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs)
 {
     bool ok = true;
     //size_t i;
@@ -209,7 +209,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs)
     
 
     // Returns the first actuator values, along with predicted x and y values to plot in the simulator
-    vector<double> result;
+    std::vector<double> result;
     result.push_back(solution.x[delta_start]);
     result.push_back(solution.x[v_target_start]);
 

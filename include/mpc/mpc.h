@@ -6,8 +6,8 @@
 #include <Eigen/QR>
 #include <cppad/cppad.hpp>
 #include <cppad/ipopt/solve.hpp>
+#include <vector>
 
-using namespace std;
 using CppAD::AD;
 using Eigen::VectorXd;
 
@@ -76,13 +76,12 @@ public:
 
 	// Solve the model given an initial state and polynomial coefficients.
     // Return the first actuatotions.
-    vector<double> Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs);
+    std::vector<double> Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs);
 
 	//Predicts Future State of the car according to Kinematic Model.
     Eigen::VectorXd predict_FutureState(float velocity_actual, float delta, float cte,float epsi, double target_velocity, double dt);
     double polyeval(Eigen::VectorXd coeffs, double x);
 	Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals, int order);
-    void broadcastTransform();
 private:
     float steer_upperBound = 0.6981;
     float steer_lowerBound = -0.6981;
