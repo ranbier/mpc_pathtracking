@@ -86,7 +86,8 @@ protected:
 
 
 
-    geometry_msgs::PoseStamped cur_pose_;
+    geometry_msgs::PoseStamped cur_pose_front_;
+	geometry_msgs::PoseStamped cur_pose_;
 
     vector<waypoint_maker::Waypoint> waypoints_;
 
@@ -94,7 +95,8 @@ protected:
 	ros::Publisher rviz_predicted_path_;
 	ros::Publisher vis_pub_;
 
-	ros::Subscriber odom_sub_;
+	ros::Subscriber odom_sub_front_;
+	ros::Subscriber odom_sub_back_;
 	ros::Subscriber lane_sub_;
 	ros::Subscriber state_sub_;
 	ros::Subscriber imu_sub_;
@@ -162,14 +164,25 @@ public:
 		rviz_predicted_path_ = nh_.advertise<nav_msgs::Path>("/rviz_predicted_path", 1);
 		vis_pub_ = nh_.advertise<visualization_msgs::Marker>("pose",1);
 
-		odom_sub_ = nh_.subscribe("odom", 1, &ROSCONTROL::OdomCallback, this);
+		odom_sub_front_ = nh_.subscribe("odom_front", 1, &ROSCONTROL::OdomFrontCallback, this);
+		odom_sub_back_ = nh_.subscribe("odom_back", 1, &ROSCONTROL::OdomBackCallback, this);
 		lane_sub_ = nh_.subscribe("/local_path", 1, &ROSCONTROL::PathCallback, this);
 		state_sub_ = nh_.subscribe("gps_state",1,&ROSCONTROL::StateCallback,this);
 		imu_sub_ = nh_.subscribe("imu",1,&ROSCONTROL::ImuCallback,this);
 
     }
+	void OdomFrontCallback(const nav_msgs::Odometry::ConstPtr &odom_msg) {
+		
+		cur_pose_front_.pose.position = odom_msg->pose.pose.position;
+		double dx = cur_pose_front_.pose.position.x - cur_pose_.pose.position.x;
+		double dy = cur_pose_front_.pose.position.y - cur_pose_.pose.position.y;		
 
-    void OdomCallback(const nav_msgs::Odometry::ConstPtr &odom_msg) 
+		cur_course_ = atan2(dy,dx)*(180/M_PI);
+		
+		is_course_ = true;
+		
+	}
+    void OdomBackCallback(const nav_msgs::Odometry::ConstPtr &odom_msg) 
 	{
 		ros::Time cur_stamp = odom_msg->header.stamp;
 		cur_pose_.pose.position = odom_msg->pose.pose.position;
@@ -298,18 +311,18 @@ void broadcastTransform()
 		loader_number_ = state_msg->lane_number;
 	}
 
-    void ImuCallback(const sensor_msgs::Imu::ConstPtr &imu_msg)
-	{
-		tf::Quaternion q(imu_msg->orientation.x, imu_msg->orientation.y,
-			imu_msg->orientation.z, imu_msg->orientation.w);
-		tf::Matrix3x3 m(q);
-		double roll, pitch, yaw;
-		m.getRPY(roll,pitch,yaw);
-		cur_course_ = yaw;
-		//cout << "cur_course is : " << cur_course_ << endl;
-		// cur_course_ = yaw * (180.0 / M_PI);
-		is_course_ = true;
-	}
+    // void ImuCallback(const sensor_msgs::Imu::ConstPtr &imu_msg)
+	// {
+	// 	tf::Quaternion q(imu_msg->orientation.x, imu_msg->orientation.y,
+	// 		imu_msg->orientation.z, imu_msg->orientation.w);
+	// 	tf::Matrix3x3 m(q);
+	// 	double roll, pitch, yaw;
+	// 	m.getRPY(roll,pitch,yaw);
+	// 	cur_course_ = yaw;
+	// 	//cout << "cur_course is : " << cur_course_ << endl;
+	// 	// cur_course_ = yaw * (180.0 / M_PI);
+	// 	is_course_ = true;
+	// }
 
     void getClosestWaypoint(geometry_msgs::PoseStamped current_pose) 
 	{
