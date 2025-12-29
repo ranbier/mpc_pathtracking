@@ -84,7 +84,19 @@ protected:
 	double dt_info;
 	int mpc_step_info;
 
+	//erp state
+	int get_gear;
+    int get_speed;
+    int get_steer;
+    int get_brake;
+	double Get_Kmh_Speed_;
+	double Get_MPH_Speed_;
+	const double GEAR_RATIO = 5.0;
+    const double WHEEL_RADIOUS = 0.29;
+	double Get_steer_;
 
+	double input_steer_;
+	double input_speed_;
 
     geometry_msgs::PoseStamped cur_pose_front_;
 	geometry_msgs::PoseStamped cur_pose_;
@@ -100,6 +112,9 @@ protected:
 	ros::Subscriber lane_sub_;
 	ros::Subscriber state_sub_;
 	ros::Subscriber imu_sub_;
+	ros::Subscriber fix_front_sub_;
+	ros::Subscriber fix_back_sub_;
+	ros::Subscriber erp42_status_sub_;
 
 	morai_msgs::CtrlCmd ackermann_msg_;
 
@@ -160,6 +175,9 @@ public:
 		steering_angle = 0.0;
 		target_velocity = 0.0;
 
+		int fix_ = 0;
+		int fix_num_;
+
 		ackermann_pub_ = nh_.advertise<morai_msgs::CtrlCmd>("/ctrl_cmd", 1);
 		rviz_predicted_path_ = nh_.advertise<nav_msgs::Path>("/rviz_predicted_path", 1);
 		vis_pub_ = nh_.advertise<visualization_msgs::Marker>("pose",1);
@@ -169,8 +187,56 @@ public:
 		lane_sub_ = nh_.subscribe("/local_path", 1, &ROSCONTROL::PathCallback, this);
 		state_sub_ = nh_.subscribe("gps_state",1,&ROSCONTROL::StateCallback,this);
 		imu_sub_ = nh_.subscribe("imu",1,&ROSCONTROL::ImuCallback,this);
+		fix_front_sub_= nh_.subscribe("ublox_gps/fix_front", 10, &ROSCONTROL::fixCallback, this);
+		fix_back_sub_= nh_.subscribe("ublox_gps_2/fix_back", 10, &ROSCONTROL::fixCallback2, this);
+		erp42_status_sub_ = nh_.subscribe("/erp42_status", 10, &ROSCONTROL::ErpCallback, this);
+	}
 
-    }
+	void fixCallback(const sensor_msgs::NavSatFix::ConstPtr &fix_msg)
+	{
+		fix_num_ = fix_msg->status.status;
+		/*
+		if (fix_msg->position_covariance[0] > 0.00022){
+			fix_ = false;
+		}
+		else{
+			fix_ = true;
+		}*/
+		if (fix_msg->position_covariance[0] < 0.00022){
+			fix_ = 0;
+		}
+		else if (fix_msg->position_covariance[0] < 0.0004 && fix_msg->position_covariance[0] >= 0.00022){
+			fix_ = 1;
+		}
+		else {
+			fix_ = 2;
+			}
+		
+			
+			// 0 -> 기본, 1 -> 12 2-> 10
+			// 0 -> 0.00022 >,   1-> 0.00022< < 0.0004   , 2 -> 0.0004<
+	}
+	void fixCallback2(const sensor_msgs::NavSatFix::ConstPtr &fix_msg)
+	{
+		fix_num_ = fix_msg->status.status;
+		/*
+		if (fix_msg->position_covariance[0] > 0.00022){
+			fix_ = false;
+		}
+		else{
+			fix_ = true;
+		}*/
+		if (fix_msg->position_covariance[0] < 0.00022){
+			fix_ = 0;
+		}
+		else if (fix_msg->position_covariance[0] < 0.0004 && fix_msg->position_covariance[0] >= 0.00022){
+			fix_ = 1;
+		}
+		else {
+			fix_ = 2;
+			}
+	}
+
 	void OdomFrontCallback(const nav_msgs::Odometry::ConstPtr &odom_msg) {
 		
 		cur_pose_front_.pose.position = odom_msg->pose.pose.position;
@@ -178,7 +244,7 @@ public:
 		double dy = cur_pose_front_.pose.position.y - cur_pose_.pose.position.y;		
 
 		cur_course_ = atan2(dy,dx)*(180/M_PI);
-		
+
 		is_course_ = true;
 		
 	}
@@ -258,6 +324,20 @@ public:
 	    waypoints_size_ = waypoints_.size();
 	    is_lane_ = !waypoints_.empty();
 	}
+
+	void ErpCallback(const erp_driver::erpStatusMsg::ConstPtr &msg){
+        
+        get_gear = msg->gear;
+        get_speed = msg->speed;
+        get_steer = msg->steer;
+        get_brake = msg->brake;
+
+        Get_steer_ = get_steer/100 * (M_PI/180); //radian
+
+        Get_Kmh_Speed_ = (get_speed / 60.0) * (2.0 * WHEEL_RADIOUS * M_PI * 3.6);
+		Get_MPH_Speed_ = Get_Kmh_Speed_ / 3.6;
+       
+    }
 
 void broadcastTransform()
 {
@@ -370,7 +450,9 @@ void broadcastTransform()
 		return a;
 	}
 
-	
+	double getSpeed() { return input_speed_; }
+	double getSteer() { return input_steer_; }
+
 
 
 	void modelPredictiveController() {
@@ -386,8 +468,10 @@ void broadcastTransform()
 			
 
     	    double psi = cur_course_;
-    	    double velocity = cur_speed_; // 10km/h -> m/s
-			double dt_ = 0.1;
+    	    // double velocity = cur_speed_; // 10km/h -> m/s
+			double velocity = Get_MPH_Speed_;
+			double dt_ = 0.05;
+			double steer = Get_steer_;
 
     	    VectorXd vehicle_waypoints_x(waypoints_size_);
     	    VectorXd vehicle_waypoints_y(waypoints_size_);
@@ -508,9 +592,9 @@ void broadcastTransform()
 
     	if (is_control_)
     	{
-    	    ackermann_msg_.longlCmdType = 2;
-    	    ackermann_msg_.velocity = target_velocity * 3.6; // km/h
-    	    ackermann_msg_.steering = -steering_angle;
+    	    // ackermann_msg_.longlCmdType = 2;
+    	    // ackermann_msg_.velocity = target_velocity * 3.6; // km/h
+    	    // ackermann_msg_.steering = -steering_angle;
 			// if (accelation >= 0) {
 			// 	ackermann_msg_.accel = accelation;
 			// 	ackermann_msg_.brake = 0;
@@ -519,10 +603,12 @@ void broadcastTransform()
 			// 	ackermann_msg_.brake = accelation;
 			// 	ackermann_msg_.accel = 0;
 			// }
+			input_speed_ = target_velocity * 3.6; // km/h
+        	input_steer_ = (steering_angle * (180 / M_PI));
 			
 			
 	
-    	    ackermann_pub_.publish(ackermann_msg_);
+    	    // ackermann_pub_.publish(ackermann_msg_);
     	}
     	is_pose_ = false;
 		is_course_ = false;
